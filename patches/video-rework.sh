@@ -1,24 +1,18 @@
 #!/bin/bash
+#
+# Legacy standalone version of the video playback patching that now lives in
+# protonprep-valve-staging.sh. Nothing in the build invokes this file; keep it
+# in sync manually if it is still useful for local experiments.
 
-# patch functions
-apply_patch() {
-    local patch_path="$1"
-    patch -Np1 < "$patch_path"
-}
+# Fail fast: never let a half-patched tree reach the compiler.
+set -euo pipefail
 
-apply_all_in_dir() {
-    local dir="$1"
-    for patch in "$dir"/*.patch; do
-        apply_patch "$patch"
-    done
-}
-
+# shellcheck source=lib.sh
+source "$(dirname "$0")/lib.sh"
 
 ### (2) WINE PATCHING ###
 
-    pushd wine
-    git reset --hard HEAD
-    git clean -xdf
+    enter_clean_dir wine
 
     git revert --no-commit e813ca5771658b00875924ab88d525322e50d39f
 
@@ -41,7 +35,7 @@ apply_all_in_dir() {
     autoreconf -f
     ./tools/make_requests
 
-    popd
+    leave_dir
 
 
 

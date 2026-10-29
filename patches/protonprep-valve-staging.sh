@@ -1,27 +1,18 @@
 #!/bin/bash
 
-# patch functions
-apply_patch() {
-    local patch_path="$1"
-    patch -Np1 < "$patch_path"
-}
+# Fail fast: never let a half-patched tree reach the compiler.
+set -euo pipefail
 
-apply_all_in_dir() {
-    local dir="$1"
-    for patch in "$dir"/*.patch; do
-        apply_patch "$patch"
-    done
-}
+# shellcheck source=lib.sh
+source "$(dirname "$0")/lib.sh"
 
 ### (1) PREP SECTION ###
 
     # Wine-Mono is reset from its pinned release archive rather than a Git submodule.
     bash ./patches/wine-mono/prepare.sh || exit 1
 
-    pushd dxvk
-    git reset --hard HEAD
-    git clean -xdf
-    patch -Np1 < ../patches/dxvk/layered-overlay-dxvk.patch
+    enter_clean_dir dxvk
+    apply_patch "../patches/dxvk/layered-overlay-dxvk.patch"
     # Keep child-rendering backpressure from repeatedly recreating launcher swapchains.
     apply_patch "../patches/dxvk/dxvk-preserve-swapchain-on-acquire-backpressure.patch"
     apply_patch "../patches/dxvk/dxgi-defer-initial-fullscreen-for-probe-swapchains.patch"
@@ -39,51 +30,42 @@ apply_all_in_dir() {
     apply_patch "../patches/dxvk/dxgi-auto-detect-hdr.patch"
     # StarCraft II: avoid GPU hangs with D3D9 constant buffer streaming (#790).
     apply_patch "../patches/dxvk/starcraft2-disable-constant-buffer-streaming.patch"
-    popd
+    leave_dir
 
-    pushd d7vk
-    git reset --hard HEAD
-    git clean -xdf
+    enter_clean_dir d7vk
     apply_patch "../patches/d7vk/d7vk-allow-avx-with-clang.patch"
-    popd
+    leave_dir
 
-    pushd openvr
-    git reset --hard HEAD
-    git clean -xdf
+    enter_clean_dir openvr
     apply_patch "../patches/openvr/openvr-no-msvc-assumption.patch"
-    popd
+    leave_dir
 
-    pushd vkd3d-proton
-    git reset --hard HEAD
-    git clean -xdf
+    enter_clean_dir vkd3d-proton
     echo "VKD3D-PROTON: prevent stalled present waits from deadlocking swapchain teardown"
     echo "VKD3D-PROTON: don't map the parent process image for engine detection (EAC untrusted file, Star Citizen/Hunt)"
     apply_all_in_dir "../patches/vkd3d-proton/"
-    popd
+    leave_dir
 
-    pushd dxvk-nvapi
-    git reset --hard HEAD
-    git clean -xdf
-    popd
+    enter_clean_dir dxvk-nvapi
+    leave_dir
 
-    pushd protonfixes
-    git reset --hard HEAD
-    git clean -xdf
-    popd
+    enter_clean_dir protonfixes
+    leave_dir
 
-    pushd wineopenxr
-    git checkout .
+    enter_dir wineopenxr
+    git checkout . || {
+        printf 'error: git checkout failed in wineopenxr\n' >&2
+        exit 1
+    }
     git clean -xdf
     echo "WINEOPENXR: patch wineopenxr so it can be built as part of wine"
     apply_all_in_dir "../patches/wineopenxr/"
-    popd
+    leave_dir
 
-    pushd vklayers/low_latency_layer
-    git reset --hard HEAD
-    git clean -xdf
+    enter_clean_dir vklayers/low_latency_layer
     echo "LOW_LATENCY_LAYER: use relative library path"
     apply_all_in_dir "../../patches/low_latency_layer"
-    popd
+    leave_dir
 
 ### END PREP SECTION ###
 
@@ -119,9 +101,7 @@ apply_all_in_dir() {
 
 ### (2) WINE PATCHING ###
 
-    pushd wine
-    git reset --hard HEAD
-    git clean -xdf
+    enter_clean_dir wine
 
 ### (2-1) PROBLEMATIC COMMIT REVERT SECTION ###
 
@@ -153,12 +133,9 @@ apply_all_in_dir() {
     apply_all_in_dir "../patches/wine-hotfixes/wineland-child-rendering/"
 
     echo "WINE: -CUSTOM- ETAASH WINE-WAYLAND+ FIXUPS"
-    for patch in ../patches/wine-hotfixes/em-fixups/*.patch; do
-        case "$patch" in
-            */0001-winewayland-add-SNI-tray-icons-and-native-context-me.patch) ;;
-            *) apply_patch "$patch" ;;
-        esac
-    done
+    # 0001 is applied explicitly above; skip it here to avoid a double apply.
+    apply_all_in_dir_except "../patches/wine-hotfixes/em-fixups/" \
+        "0001-winewayland-add-SNI-tray-icons-and-native-context-me.patch"
 
 ### END EM-11/WINE-WAYLAND PATCH SECTION ###
 
@@ -574,9 +551,7 @@ apply_all_in_dir() {
     # https://github.com/xzn/proton-ds5-haptic
     # Includes default VitaPad-to-DS4 translation (issue #691).
     echo "WINE: -HOTFIX- Add proton DS5 patches"
-    for patch in ../patches/proton-ds5-haptic/*.patch; do
-        apply_patch "$patch"
-    done
+    apply_all_in_dir "../patches/proton-ds5-haptic/"
 
     echo "WINE: expose mapped Switch Pro controllers as Xbox when Steam Input is disabled"
     apply_patch "../patches/wine-hotfixes/pending/winebus-switch-pro-xinput-identity.patch"
@@ -625,7 +600,7 @@ apply_all_in_dir() {
     autoreconf -f
     ./tools/make_requests
 
-    popd
+    leave_dir
 
 
 

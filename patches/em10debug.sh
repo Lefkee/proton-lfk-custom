@@ -1,48 +1,36 @@
 #!/bin/bash
 
-# patch functions
-apply_patch() {
-    local patch_path="$1"
-    patch -Np1 < "$patch_path"
-}
+# Fail fast: never let a half-patched tree reach the compiler.
+set -euo pipefail
 
-apply_all_in_dir() {
-    local dir="$1"
-    for patch in "$dir"/*.patch; do
-        apply_patch "$patch"
-    done
-}
+# shellcheck source=lib.sh
+source "$(dirname "$0")/lib.sh"
 
 ### (1) PREP SECTION ###
 
-    pushd dxvk
-    git reset --hard HEAD
-    git clean -xdf
-    popd
+    enter_clean_dir dxvk
+    leave_dir
 
-    pushd vkd3d-proton
-    git reset --hard HEAD
-    git clean -xdf
-    popd
+    enter_clean_dir vkd3d-proton
+    leave_dir
 
-    pushd dxvk-nvapi
-    git reset --hard HEAD
-    git clean -xdf
-    popd
+    enter_clean_dir dxvk-nvapi
+    leave_dir
 
-    pushd protonfixes
-    git reset --hard HEAD
-    git clean -xdf
+    enter_clean_dir protonfixes
     echo "PROTONFIXES: add optiscaler support"
     apply_all_in_dir "../patches/protonfixes/"
-    popd
+    leave_dir
 
-    pushd wineopenxr
-    git checkout .
+    enter_dir wineopenxr
+    git checkout . || {
+        printf 'error: git checkout failed in wineopenxr\n' >&2
+        exit 1
+    }
     git clean -xdf
     echo "WINEOPENXR: patch wineopenxr so it can be built as part of wine"
     apply_all_in_dir "../patches/wineopenxr/"
-    popd
+    leave_dir
 
 ### END PREP SECTION ###
 
@@ -64,9 +52,7 @@ apply_all_in_dir() {
 
 ### (2) WINE PATCHING ###
 
-    pushd wine
-    git reset --hard HEAD
-    git clean -xdf
+    enter_clean_dir wine
 
 ### (2-1) PROBLEMATIC COMMIT REVERT SECTION ###
 
@@ -224,15 +210,13 @@ apply_all_in_dir() {
 
     # https://github.com/xzn/proton-ds5-haptic
     echo "WINE: -HOTFIX- Add proton DS5 patches"
-    for patch in ../patches/proton-ds5-haptic/*.patch; do
-        apply_patch "$patch"
-    done
+    apply_all_in_dir "../patches/proton-ds5-haptic/"
 
     echo "WINE: RUN AUTOCONF TOOLS/MAKE_REQUESTS"
     autoreconf -f
     ./tools/make_requests
 
-    popd
+    leave_dir
 
 
 

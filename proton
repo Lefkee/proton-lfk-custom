@@ -472,8 +472,9 @@ def try_get_game_library_dir():
 
     #find library path which is a subset of the game path
     library_paths = g_session.env["STEAM_COMPAT_LIBRARY_PATHS"].split(":")
+    install_path = g_session.env["STEAM_COMPAT_INSTALL_PATH"]
     for path in library_paths:
-        if path in g_session.env["STEAM_COMPAT_INSTALL_PATH"]:
+        if utilities.is_path_within(install_path, path):
             return get_validated_steamapps_parent(path)
 
     return None

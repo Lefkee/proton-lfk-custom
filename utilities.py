@@ -114,6 +114,22 @@ _config_envvars = {
 }
 
 
+def is_path_within(path: str, root: str) -> bool:
+    """Return whether *path* is *root* itself or lives below it.
+
+    A plain substring check treats '/games2/x' as being inside '/games'.
+    Resolve both sides and compare path components with ``commonpath``
+    instead. ``ValueError`` (mixed relative/absolute paths, different drives)
+    means "not within".
+    """
+    try:
+        real_path = os.path.realpath(path)
+        real_root = os.path.realpath(root)
+        return os.path.commonpath([real_path, real_root]) == real_root
+    except ValueError:
+        return False
+
+
 def proton_add_config() -> set:
     configs = os.environ.get("PROTON_ADD_CONFIG", "").split(',')
     steam_configs = set()
@@ -313,4 +329,5 @@ if __name__ == '__main__':
     pass
 
 
-__all__ = ['primary_gpu_supports_vulkan', 'get_vulkan_gpus', 'log_environment', 'is_driver_loaded']
+__all__ = ['primary_gpu_supports_vulkan', 'get_vulkan_gpus', 'group_gpus',
+           'is_path_within', 'log_environment', 'is_driver_loaded']

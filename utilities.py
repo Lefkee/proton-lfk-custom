@@ -9,7 +9,6 @@ from argparse import Namespace
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import cache
-from itertools import groupby
 from pathlib import Path
 
 from vulkan import (
@@ -220,6 +219,26 @@ def get_vulkan_gpus() -> list[GPU]:
     return gpus
 
 
+def group_gpus(
+    gpus: list[GPU], device_filter: str = ''
+) -> dict[VkPhysicalDeviceType, list[GPU]]:
+    """Group GPUs by device type, keeping every GPU of a type together.
+
+    ``itertools.groupby`` only groups adjacent items, and the GPU list is not
+    sorted, so two discrete GPUs separated by an integrated one used to
+    overwrite each other. Append per type instead.
+    """
+    grouped: dict[VkPhysicalDeviceType, list[GPU]] = defaultdict(list)
+    for gpu in gpus:
+        if (
+            not device_filter or
+            device_filter in gpu.deviceName or
+            device_filter in str(gpu.deviceUUID).replace('-', '')
+        ):
+            grouped[gpu.deviceType].append(gpu)
+    return grouped
+
+
 def primary_gpu_supports_vulkan(
     major: int, minor: int, patch: int = 0, /,
     device_filter: str = '',
@@ -231,18 +250,7 @@ def primary_gpu_supports_vulkan(
     if device_extensions is None:
         device_extensions = {}
 
-    gpus = get_vulkan_gpus()
-    grouped: dict[VkPhysicalDeviceType, list[GPU]] = defaultdict(list)
-    for group_type, gpus in groupby(gpus, lambda x: x.deviceType):
-        grouped[group_type] = list(
-            gpu
-            for gpu in gpus
-            if (
-                not device_filter or
-                device_filter in gpu.deviceName or
-                device_filter in str(gpu.deviceUUID).replace('-', '')
-            )
-        )
+    grouped = group_gpus(get_vulkan_gpus(), device_filter)
     primary_category = (
             grouped[VkPhysicalDeviceType.DISCRETE_GPU] or
             grouped[VkPhysicalDeviceType.INTEGRATED_GPU] or

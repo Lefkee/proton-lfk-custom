@@ -23,11 +23,30 @@ from enum import Enum
 from functools import reduce
 from typing import Self
 
-libvulkan = CDLL('libvulkan.so.1')
-
-
 class VulkanError(RuntimeError):
     pass
+
+
+_libvulkan = None
+
+
+def _get_libvulkan():
+    """Load libvulkan on first use instead of at import time.
+
+    ``proton`` imports utilities, which imports this module, even for verbs
+    that never touch Vulkan (``destroyprefix``, ``getcompatpath``, help).
+    Failing at import time made all of those unusable when no Vulkan loader
+    was installed.
+    """
+    global _libvulkan
+    if _libvulkan is None:
+        try:
+            _libvulkan = CDLL('libvulkan.so.1')
+        except OSError as exc:
+            raise VulkanError(
+                "libvulkan.so.1 yüklenemedi; Vulkan yükleyicisi/sürücüsü kurulu mu?"
+            ) from exc
+    return _libvulkan
 
 
 def attach_vkresult_error_handler(func):
@@ -592,33 +611,57 @@ class VkPhysicalDeviceFeatures2(Structure):
     ]
 
 
-# https://docs.vulkan.org/refpages/latest/refpages/source/vkCreateInstance.html
-vkCreateInstance = attach_vkresult_error_handler(libvulkan.vkCreateInstance)
-vkCreateInstance.argtypes = [POINTER(VkInstanceCreateInfo), c_void_p, POINTER(VkInstance)]
+# Bound lazily by _bind_vulkan_functions(); see _get_libvulkan().
+vkCreateInstance = None
+vkDestroyInstance = None
+vkEnumeratePhysicalDevices = None
+vkGetPhysicalDeviceFeatures2 = None
+vkGetPhysicalDeviceProperties2 = None
+vkEnumerateDeviceExtensionProperties = None
 
-# https://docs.vulkan.org/refpages/latest/refpages/source/vkDestroyInstance.html
-vkDestroyInstance = libvulkan.vkDestroyInstance
-vkDestroyInstance.argtypes = [VkInstance, c_void_p]
-vkDestroyInstance.restype = None
 
-# https://docs.vulkan.org/refpages/latest/refpages/source/vkEnumeratePhysicalDevices.html
-vkEnumeratePhysicalDevices = attach_vkresult_error_handler(libvulkan.vkEnumeratePhysicalDevices)
-vkEnumeratePhysicalDevices.argtypes = [VkInstance, POINTER(c_uint32), POINTER(VkPhysicalDevice)]
+def _bind_vulkan_functions():
+    """Bind the Vulkan entry points once, on first real use."""
+    global vkCreateInstance, vkDestroyInstance, vkEnumeratePhysicalDevices
+    global vkGetPhysicalDeviceFeatures2, vkGetPhysicalDeviceProperties2
+    global vkEnumerateDeviceExtensionProperties
 
-# https://docs.vulkan.org/refpages/latest/refpages/source/vkGetPhysicalDeviceFeatures2.html
-vkGetPhysicalDeviceFeatures2 = libvulkan.vkGetPhysicalDeviceFeatures2
-vkGetPhysicalDeviceFeatures2.argtypes = [VkPhysicalDevice, POINTER(VkPhysicalDeviceFeatures2)]
-vkGetPhysicalDeviceFeatures2.restype = None
+    if vkCreateInstance is not None:
+        return
 
-# https://docs.vulkan.org/spec/latest/chapters/devsandqueues.html#vkGetPhysicalDeviceProperties2
-vkGetPhysicalDeviceProperties2 = libvulkan.vkGetPhysicalDeviceProperties2
-vkGetPhysicalDeviceProperties2.argtypes = [VkPhysicalDevice, POINTER(VkPhysicalDeviceProperties2)]
-vkGetPhysicalDeviceProperties2.restype = None
+    libvulkan = _get_libvulkan()
+    try:
+        # https://docs.vulkan.org/refpages/latest/refpages/source/vkCreateInstance.html
+        vkCreateInstance = attach_vkresult_error_handler(libvulkan.vkCreateInstance)
+        vkCreateInstance.argtypes = [POINTER(VkInstanceCreateInfo), c_void_p, POINTER(VkInstance)]
 
-# https://docs.vulkan.org/refpages/latest/refpages/source/vkEnumerateDeviceExtensionProperties.html
-vkEnumerateDeviceExtensionProperties = libvulkan.vkEnumerateDeviceExtensionProperties
-vkEnumerateDeviceExtensionProperties.argtypes = [VkPhysicalDevice, c_char_p, POINTER(c_uint32), POINTER(VkExtensionProperties)]
-vkEnumerateDeviceExtensionProperties.restype = None
+        # https://docs.vulkan.org/refpages/latest/refpages/source/vkDestroyInstance.html
+        vkDestroyInstance = libvulkan.vkDestroyInstance
+        vkDestroyInstance.argtypes = [VkInstance, c_void_p]
+        vkDestroyInstance.restype = None
+
+        # https://docs.vulkan.org/refpages/latest/refpages/source/vkEnumeratePhysicalDevices.html
+        vkEnumeratePhysicalDevices = attach_vkresult_error_handler(libvulkan.vkEnumeratePhysicalDevices)
+        vkEnumeratePhysicalDevices.argtypes = [VkInstance, POINTER(c_uint32), POINTER(VkPhysicalDevice)]
+
+        # https://docs.vulkan.org/refpages/latest/refpages/source/vkGetPhysicalDeviceFeatures2.html
+        vkGetPhysicalDeviceFeatures2 = libvulkan.vkGetPhysicalDeviceFeatures2
+        vkGetPhysicalDeviceFeatures2.argtypes = [VkPhysicalDevice, POINTER(VkPhysicalDeviceFeatures2)]
+        vkGetPhysicalDeviceFeatures2.restype = None
+
+        # https://docs.vulkan.org/spec/latest/chapters/devsandqueues.html#vkGetPhysicalDeviceProperties2
+        vkGetPhysicalDeviceProperties2 = libvulkan.vkGetPhysicalDeviceProperties2
+        vkGetPhysicalDeviceProperties2.argtypes = [VkPhysicalDevice, POINTER(VkPhysicalDeviceProperties2)]
+        vkGetPhysicalDeviceProperties2.restype = None
+
+        # https://docs.vulkan.org/refpages/latest/refpages/source/vkEnumerateDeviceExtensionProperties.html
+        vkEnumerateDeviceExtensionProperties = libvulkan.vkEnumerateDeviceExtensionProperties
+        vkEnumerateDeviceExtensionProperties.argtypes = [VkPhysicalDevice, c_char_p, POINTER(c_uint32), POINTER(VkExtensionProperties)]
+        vkEnumerateDeviceExtensionProperties.restype = None
+    except AttributeError as exc:
+        raise VulkanError(
+            "libvulkan.so.1 gerekli Vulkan fonksiyonlarını sağlamıyor"
+        ) from exc
 
 # https://docs.vulkan.org/spec/latest/chapters/extensions.html#extendingvulkan-coreversions-versionnumbers
 VK_VERSION_MAJOR = lambda version: (version >> 22)
@@ -835,6 +878,7 @@ class VulkanInstanceCreateInfo:
 
 class VulkanInstance:
     def __init__(self, handle: VkInstance | None = None):
+        _bind_vulkan_functions()
         if handle is None:
             handle = c_void_p()
             info = VulkanInstanceCreateInfo()

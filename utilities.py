@@ -1,6 +1,7 @@
 """Various utility functions for use in the proton script"""
 
 import io
+import shutil
 import sys
 import os
 import uuid
@@ -27,10 +28,56 @@ base_config = Path(os.getenv('XDG_CONFIG_HOME', '~/.config')).expanduser()
 base_cache = Path(os.getenv('XDG_CACHE_HOME', '~/.cache')).expanduser()
 
 
+def migrate_legacy_config_dir(old_dir: Path, new_dir: Path) -> list[str]:
+    """One-time copy of protonfixes config from the legacy cache location.
+
+    Older builds stored the config under ``$XDG_CACHE_HOME/protonfixes``.
+    Only top-level regular files are copied (cache subdirectories such as
+    ``upscalers/`` are skipped) and the old files are left in place, so a
+    downgrade still finds them.
+
+    Returns the list of copied file names. Safe to call repeatedly: it does
+    nothing once the new directory exists.
+    """
+    copied: list[str] = []
+
+    try:
+        if new_dir.exists() or not old_dir.is_dir():
+            return copied
+
+        new_dir.mkdir(parents=True, exist_ok=True)
+
+        for entry in sorted(old_dir.iterdir()):
+            if not entry.is_file():
+                continue
+            destination = new_dir / entry.name
+            if destination.exists():
+                continue
+            shutil.copy2(entry, destination)
+            copied.append(entry.name)
+    except OSError as exc:
+        log.warn(f"Could not migrate protonfixes config from {old_dir}: {exc}\n")
+        return copied
+
+    if copied:
+        log.info(
+            "Copied protonfixes config file(s) from the legacy cache directory "
+            f"{old_dir} to {new_dir}: {', '.join(copied)} "
+            "(old files were left in place)\n"
+        )
+
+    return copied
+
+
 class Config(Namespace):
     class Path(Namespace):
-        config_dir: Path = base_cache.joinpath('protonfixes')
         cache_dir: Path = base_cache.joinpath('protonfixes')
+
+        @property
+        def config_dir(self) -> Path:
+            target = base_config.joinpath('protonfixes')
+            migrate_legacy_config_dir(base_cache.joinpath('protonfixes'), target)
+            return target
 
     path = Path()
 

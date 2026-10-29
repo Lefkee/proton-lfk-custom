@@ -1,0 +1,51 @@
+name: Lint workflows
+
+on:
+  push:
+    paths:
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Workflow syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # Hard gate: every workflow must be valid YAML. This catches the
+      # indentation bug that silently disabled release.yml.
+      - name: Validate YAML
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+
+          import yaml
+
+          failed = False
+          for path in sorted(glob.glob('.github/workflows/*.yml')):
+              try:
+                  with open(path, encoding='utf-8') as handle:
+                      yaml.safe_load(handle)
+              except Exception as exc:  # noqa: BLE001 - report every parse error
+                  failed = True
+                  print(f'FAIL {path}: {type(exc).__name__}: {exc}')
+              else:
+                  print(f'OK   {path}')
+          sys.exit(1 if failed else 0)
+          PY
+
+      # Advisory for now: actionlint also lints embedded shell, and the
+      # existing scripts have pre-existing warnings. Promote to a hard gate
+      # once those are cleaned up.
+      - name: actionlint (advisory)
+        continue-on-error: true
+        uses: docker://rhysd/actionlint:latest
+        with:
+          args: -color

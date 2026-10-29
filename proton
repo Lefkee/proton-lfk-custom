@@ -46,6 +46,7 @@ import protonfixes
 #To enable debug logging, copy "user_settings.sample.py" to "user_settings.py"
 #and edit it if needed.
 import utilities
+from prefix_version import parse_prefix_version
 
 CURRENT_PREFIX_VERSION="GE-Proton11-11"
 
@@ -841,16 +842,24 @@ class CompatData:
 
         if '-' not in old_ver:
             #How can this happen??
-            log("Prefix has an invalid version?! You may want to back up user files and delete this prefix.")
+            log("Prefix has an invalid version (%r)?! You may want to back up user files and delete this prefix." % (old_ver,))
             #If it does, just let the Wine upgrade happen and hope it works...
             return
 
-        try:
-            old_proton_ver, old_prefix_ver = old_ver.split('-')
-            old_proton_maj, old_proton_min = old_proton_ver.split('.')
-            new_proton_ver, _              = CURRENT_PREFIX_VERSION.split('-')
-            new_proton_maj, new_proton_min = new_proton_ver.split('.')
+        old_parsed = parse_prefix_version(old_ver)
+        new_parsed = parse_prefix_version(CURRENT_PREFIX_VERSION)
+        if old_parsed is None or new_parsed is None:
+            log("Prefix has an invalid version (%r)?! You may want to back up user files and delete this prefix." % (old_ver,))
+            #Just let the Wine upgrade happen and hope it works...
+            with open(self.creation_sync_guard, "w"):
+                pass
+            os.sync()
+            return
 
+        old_proton_ver, old_proton_maj, old_proton_min, old_prefix_ver = old_parsed
+        _, new_proton_maj, new_proton_min, _ = new_parsed
+
+        try:
             if int(new_proton_maj) < int(old_proton_maj) or \
                     (int(new_proton_maj) == int(old_proton_maj) and \
                      int(new_proton_min) < int(old_proton_min)):
@@ -1001,7 +1010,7 @@ class CompatData:
                     os.remove(dll)
 
         except ValueError:
-            log("Prefix has an invalid version?! You may want to back up user files and delete this prefix.")
+            log("Prefix has an invalid version (%r)?! You may want to back up user files and delete this prefix." % (old_ver,))
             #Just let the Wine upgrade happen and hope it works...
             with open(self.creation_sync_guard, "w"):
                 pass

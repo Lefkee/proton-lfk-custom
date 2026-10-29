@@ -101,11 +101,34 @@ leave_dir() {
     }
 }
 
+# Refuse to run destructive git commands unless the current directory is the
+# root of its own repository. An uninitialised submodule is just an empty
+# directory inside the superproject, so 'git reset --hard' / 'git clean' would
+# otherwise run against the parent repository and delete real work.
+require_git_repo_root() {
+    local here toplevel
+
+    here="$(pwd -P)"
+
+    if ! toplevel="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+        printf 'error: %s is not a git repository (submodule not initialized?)\n' "$here" >&2
+        exit 1
+    fi
+
+    toplevel="$(cd "$toplevel" && pwd -P)"
+    if [[ "$toplevel" != "$here" ]]; then
+        printf 'error: %s is inside the repository at %s, not its own root;\n' "$here" "$toplevel" >&2
+        printf '       refusing git reset/clean (submodule not initialized?)\n' >&2
+        exit 1
+    fi
+}
+
 # The common "start from a pristine submodule" sequence.
 enter_clean_dir() {
     local dir="${1:?enter_clean_dir: missing directory}"
 
     enter_dir "$dir"
+    require_git_repo_root
 
     git reset --hard HEAD || {
         printf 'error: git reset --hard failed in %s\n' "$dir" >&2

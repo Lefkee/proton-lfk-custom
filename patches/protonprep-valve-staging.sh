@@ -53,6 +53,7 @@ source "$(dirname "$0")/lib.sh"
     leave_dir
 
     enter_dir wineopenxr
+    require_git_repo_root
     git checkout . || {
         printf 'error: git checkout failed in wineopenxr\n' >&2
         exit 1

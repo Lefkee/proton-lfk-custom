@@ -25,8 +25,12 @@ def parse_prefix_version(version):
     (``"3.7"``), ``major``/``minor`` are integers used for ordering, and
     ``prefix_ver`` stays a string because callers compare it with ``int()``.
 
-    For GE names the Wine base maps to ``major`` and the GE build number maps
-    to ``minor``. Returns ``None`` when the string is not recognised.
+    For GE names only the Wine base is a comparable version: the GE build
+    number is not a Wine minor version and must not make a prefix look newer
+    (``GE-Proton11-12`` is not newer than ``GE-Proton11-11``). It therefore
+    maps to ``prefix_ver`` only and ``minor`` stays ``0``.
+
+    Returns ``None`` when the string is not recognised.
     """
     if not version:
         return None
@@ -37,7 +41,7 @@ def parse_prefix_version(version):
     if match is not None:
         major = int(match.group(1))
         prefix_ver = match.group(2) or "0"
-        return (f"GE-Proton{major}", major, int(prefix_ver), prefix_ver)
+        return (f"GE-Proton{major}", major, 0, prefix_ver)
 
     match = _VALVE_RE.match(version)
     if match is not None:
@@ -46,3 +50,19 @@ def parse_prefix_version(version):
         return (proton_ver, int(match.group(1)), int(match.group(2)), prefix_ver)
 
     return None
+
+
+def is_newer_prefix(old_parsed, new_parsed):
+    """Return whether the prefix in *old_parsed* is newer than *new_parsed*.
+
+    Only the comparable ``(major, minor)`` components are considered, so a
+    higher GE build number alone never triggers the "Removing newer prefix"
+    cleanup. Returns ``None`` if either side could not be parsed.
+    """
+    if old_parsed is None or new_parsed is None:
+        return None
+
+    _, old_major, old_minor, _ = old_parsed
+    _, new_major, new_minor, _ = new_parsed
+
+    return new_major < old_major or (new_major == old_major and new_minor < old_minor)

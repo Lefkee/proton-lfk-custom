@@ -46,7 +46,7 @@ import protonfixes
 #To enable debug logging, copy "user_settings.sample.py" to "user_settings.py"
 #and edit it if needed.
 import utilities
-from prefix_version import parse_prefix_version
+from prefix_version import is_newer_prefix, parse_prefix_version
 
 CURRENT_PREFIX_VERSION="GE-Proton11-11"
 
@@ -857,12 +857,9 @@ class CompatData:
             return
 
         old_proton_ver, old_proton_maj, old_proton_min, old_prefix_ver = old_parsed
-        _, new_proton_maj, new_proton_min, _ = new_parsed
 
         try:
-            if int(new_proton_maj) < int(old_proton_maj) or \
-                    (int(new_proton_maj) == int(old_proton_maj) and \
-                     int(new_proton_min) < int(old_proton_min)):
+            if is_newer_prefix(old_parsed, new_parsed):
                 log("Removing newer prefix")
                 self.old_machine_guid = get_replace_reg_value(self.prefix_dir + "system.reg", "Software\\\\Microsoft\\\\Cryptography", "MachineGuid")
                 if old_proton_ver == "3.7" and not file_exists(self.tracked_files_file, follow_symlinks=True):

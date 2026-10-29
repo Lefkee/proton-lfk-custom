@@ -60,7 +60,7 @@ _config_envvars = {
     'wow64': 'PROTON_USE_WOW64',
     'dlss': 'PROTON_DLSS_UPGRADE',
     'xess': 'PROTON_XESS_UPGRADE',
-    'fsr3': 'PROTON_FSR4_UPGRADE',
+    'fsr3': 'PROTON_FSR3_UPGRADE',
     'fsr4': 'PROTON_FSR4_UPGRADE',
     'ffx3': 'PROTON_FFX3_UPGRADE',
     'ffx4': 'PROTON_FFX4_UPGRADE',

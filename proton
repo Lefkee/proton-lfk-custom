@@ -51,7 +51,12 @@ from prefix_version import is_newer_prefix, parse_prefix_version
 CURRENT_PREFIX_VERSION="GE-Proton11-11"
 
 PFX="Proton: "
+PROTON_USAGE="Usage: proton <verb> [args]"
 ld_path_var = "LD_LIBRARY_PATH"
+
+def proton_root():
+    """Return the directory containing this script, following symlinks."""
+    return os.path.dirname(os.path.realpath(__file__))
 
 # https://bugs.kde.org/show_bug.cgi?id=524702
 # Ark can omit empty directory entries when extracting Proton tarballs. Keep
@@ -2954,11 +2959,19 @@ class Session:
         return rc
 
 if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        sys.stderr.write(PROTON_USAGE + "\n")
+        sys.exit(2)
+
+    if sys.argv[1] in ("-h", "--help"):
+        sys.stdout.write(PROTON_USAGE + "\n")
+        sys.exit(0)
+
     if "STEAM_COMPAT_DATA_PATH" not in os.environ:
         log("No compat data path?")
         sys.exit(1)
 
-    g_proton = Proton(os.path.dirname(sys.argv[0]))
+    g_proton = Proton(proton_root())
 
     g_proton.cleanup_legacy_dist()
     g_proton.do_steampipe_fixups()

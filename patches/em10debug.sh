@@ -22,13 +22,7 @@ source "$(dirname "$0")/lib.sh"
     apply_all_in_dir "../patches/protonfixes/"
     leave_dir
 
-    enter_dir wineopenxr
-    require_git_repo_root
-    git checkout . || {
-        printf 'error: git checkout failed in wineopenxr\n' >&2
-        exit 1
-    }
-    git clean -xdf
+    enter_clean_subdir wineopenxr
     echo "WINEOPENXR: patch wineopenxr so it can be built as part of wine"
     apply_all_in_dir "../patches/wineopenxr/"
     leave_dir

@@ -140,3 +140,26 @@ enter_clean_dir() {
         exit 1
     }
 }
+
+# Clean a plain subdirectory of the superproject (e.g. wineopenxr), which is
+# tracked directly by the parent repository and is not a submodule.
+#
+# Unlike enter_clean_dir() this deliberately does not require its own repo
+# root and never runs 'git reset --hard': that would run against the parent
+# repository. Both commands are scoped to the current directory, so only
+# tracked/untracked files below it are affected.
+enter_clean_subdir() {
+    local dir="${1:?enter_clean_subdir: missing directory}"
+
+    enter_dir "$dir"
+
+    git checkout -- . || {
+        printf 'error: git checkout failed in %s\n' "$dir" >&2
+        exit 1
+    }
+
+    git clean -xdf -- . || {
+        printf 'error: git clean -xdf failed in %s\n' "$dir" >&2
+        exit 1
+    }
+}

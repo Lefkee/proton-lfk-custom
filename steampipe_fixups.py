@@ -41,17 +41,17 @@ def process_dir(path):
     return 0
 
 def write_manifest(manifest):
-    out = open(manifest, "w")
-    json.dump(
-        {
-            "id": str(secrets.randbits(32)), #we need steampipe to update this file for every build
-            "empty_dirs": empty_dirs,
-            "no_write_paths": no_write_paths,
-        },
-        out,
-        indent = 4,
-        sort_keys = True
-    )
+    with open(manifest, "w") as out:
+        json.dump(
+            {
+                "id": str(secrets.randbits(32)), #we need steampipe to update this file for every build
+                "empty_dirs": empty_dirs,
+                "no_write_paths": no_write_paths,
+            },
+            out,
+            indent = 4,
+            sort_keys = True
+        )
     return 0
 
 def do_process(path, manifest):
@@ -73,7 +73,8 @@ def do_process(path, manifest):
     return 0
 
 def do_restore(path, manifest):
-    loaded = json.load(open(manifest, "r"))
+    with open(manifest, "r") as manifest_file:
+        loaded = json.load(manifest_file)
 
     empty_dirs = loaded["empty_dirs"]
     no_write_paths = loaded["no_write_paths"]

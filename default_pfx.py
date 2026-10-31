@@ -12,11 +12,11 @@ def file_is_wine_builtin_dll(path):
     if not os.path.exists(path):
         return False
     try:
-        sfile = open(path, "rb")
-        sfile.seek(0x40)
-        tag = sfile.read(20)
-        return tag.startswith((b"Wine placeholder DLL", b"Wine builtin DLL"))
-    except IOError:
+        with open(path, "rb") as sfile:
+            sfile.seek(0x40)
+            tag = sfile.read(20)
+            return tag.startswith((b"Wine placeholder DLL", b"Wine builtin DLL"))
+    except OSError:
         return False
 
 def little_endian_bytes_to_uint(b):
@@ -31,17 +31,17 @@ def dll_bitness(path):
     if not os.path.exists(path):
         return 0
     try:
-        sfile = open(path, "rb")
-        sfile.seek(0x3c)
-        ntheader_ofs = little_endian_bytes_to_uint(sfile.read(4))
-        sfile.seek(0x18 + ntheader_ofs)
-        magic = sfile.read(2)
-        if magic == bytes((11, 1)):
-            return 32
-        if magic == bytes((11, 2)):
-            return 64
-        return 0
-    except IOError:
+        with open(path, "rb") as sfile:
+            sfile.seek(0x3c)
+            ntheader_ofs = little_endian_bytes_to_uint(sfile.read(4))
+            sfile.seek(0x18 + ntheader_ofs)
+            magic = sfile.read(2)
+            if magic == bytes((11, 1)):
+                return 32
+            if magic == bytes((11, 2)):
+                return 64
+            return 0
+    except OSError:
         return 0
 
 def make_relative_symlink(target, linkname):

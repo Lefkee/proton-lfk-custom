@@ -20,6 +20,7 @@ import uuid
 import json
 import time
 
+from contextlib import nullcontext
 from ctypes import CDLL
 from ctypes import CFUNCTYPE
 from ctypes import POINTER
@@ -264,11 +265,11 @@ def file_is_wine_builtin_dll(path):
     if not file_exists(path, follow_symlinks=True):
         return False
     try:
-        sfile = open(path, "rb")
-        sfile.seek(0x40)
-        tag = sfile.read(20)
-        return tag.startswith((b"Wine placeholder DLL", b"Wine builtin DLL"))
-    except IOError:
+        with open(path, "rb") as sfile:
+            sfile.seek(0x40)
+            tag = sfile.read(20)
+            return tag.startswith((b"Wine placeholder DLL", b"Wine builtin DLL"))
+    except OSError:
         return False
 
 def makedirs(path):
@@ -670,19 +671,17 @@ def get_replace_reg_value(file, key, name, new_value=None):
     if not file_exists(file, follow_symlinks=True):
         return None
     replaced = False
-    out = None
-    if new_value is not None:
-        out = open(file + ".new", "w")
     found_key = False
     old_value = None
     namestr="\"" + name + "\"="
-    with open(file, "r") as reg_in:
+    new_file = file + ".new"
+
+    out_context = open(new_file, "w") if new_value is not None else nullcontext()
+    with open(file, "r") as reg_in, out_context as out:
         for line in reg_in:
             if not replaced:
                 if line[0] == '[':
                     if found_key:
-                        if out is not None:
-                            out.close()
                         return None
                     if line[1:len(key) + 1] == key:
                         found_key = True
@@ -692,6 +691,8 @@ def get_replace_reg_value(file, key, name, new_value=None):
                         old_value = line[idx + len(namestr):]
                         if out is not None:
                             out.write(namestr + new_value)
+                            if line.endswith("\n"):
+                                out.write("\n")
                             replaced = True
                             continue
                         else:
@@ -699,21 +700,16 @@ def get_replace_reg_value(file, key, name, new_value=None):
             if out is not None:
                 out.write(line)
 
-    if out is not None:
-        out.close()
-
     if replaced:
         try:
             os.rename(file, file + ".old")
         except OSError:
             os.remove(file)
-            pass
 
         try:
-            os.rename(file + ".new", file)
+            os.rename(new_file, file)
         except OSError:
             log("Unable to write new registry file to " + file)
-            pass
 
     return old_value
 

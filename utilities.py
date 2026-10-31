@@ -4,6 +4,7 @@ import io
 import shutil
 import sys
 import os
+import tempfile
 import uuid
 from argparse import Namespace
 from collections import defaultdict
@@ -112,6 +113,20 @@ _config_envvars = {
     'ffx4': 'PROTON_FFX4_UPGRADE',
     'optiscaler': 'PROTON_USE_OPTISCALER',
 }
+
+
+def get_home_dir() -> str:
+    """Return the user's home directory without requiring ``$HOME``.
+
+    ``os.environ["HOME"]`` raised ``KeyError`` in environments that unset it
+    (some launchers and containers). ``expanduser`` checks ``$HOME`` and then
+    the passwd database; if both fail, fall back to ``$HOME`` or the temp dir
+    so logging has somewhere to go.
+    """
+    home = os.path.expanduser("~")
+    if home == "~":
+        home = os.environ.get("HOME", tempfile.gettempdir())
+    return home
 
 
 def is_path_within(path: str, root: str) -> bool:
@@ -330,4 +345,4 @@ if __name__ == '__main__':
 
 
 __all__ = ['primary_gpu_supports_vulkan', 'get_vulkan_gpus', 'group_gpus',
-           'is_path_within', 'log_environment', 'is_driver_loaded']
+           'get_home_dir', 'is_path_within', 'log_environment', 'is_driver_loaded']

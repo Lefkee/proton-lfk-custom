@@ -2182,7 +2182,8 @@ class Session:
             pass
 
     def setup_logging(self, *, append_forever):
-        basedir = self.env.get("PROTON_LOG_DIR", os.environ["HOME"])
+        # os.environ["HOME"] raised KeyError on systems without HOME.
+        basedir = self.env.get("PROTON_LOG_DIR", utilities.get_home_dir())
 
         if append_forever:
             #SteamGameId is not always available

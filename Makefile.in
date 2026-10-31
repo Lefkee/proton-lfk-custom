@@ -1867,10 +1867,13 @@ deploy: all
 
 .PHONY: redist
 redist: all
+	rm -rf $(REDIST_DIR) $(BUILD_NAME) $(BUILD_NAME).tar.gz
 	mkdir -p $(REDIST_DIR)
 	rsync --delete -arx $(DST_BASE)/ $(REDIST_DIR)
 	mv $(REDIST_DIR) $(BUILD_NAME)
-	tar -cvzf $(BUILD_NAME).tar.gz $(BUILD_NAME)
+	tar --sort=name --mtime=@$(SOURCE_DATE_EPOCH) \
+	    --owner=0 --group=0 --numeric-owner \
+	    -cf - $(BUILD_NAME) | gzip -9n > $(BUILD_NAME).tar.gz
 	sha512sum $(BUILD_NAME).tar.gz > $(BUILD_NAME).sha512sum
 	sha256sum $(BUILD_NAME).* > SHA256SUMS
 	@echo "Proton build available at $(BUILD_NAME).tar.gz"
